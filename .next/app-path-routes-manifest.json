@@ -1,0 +1,11 @@
+{
+  "/api/auth/callback/route": "/api/auth/callback",
+  "/api/auth/switch-organization/route": "/api/auth/switch-organization",
+  "/api/auth/user/route": "/api/auth/user",
+  "/_not-found/page": "/_not-found",
+  "/page": "/",
+  "/(dashboard)/dashboard/page": "/dashboard",
+  "/(auth)/verify-email/page": "/verify-email",
+  "/(auth)/login/page": "/login",
+  "/(auth)/signup/page": "/signup"
+}
