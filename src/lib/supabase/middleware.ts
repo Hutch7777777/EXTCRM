@@ -72,21 +72,35 @@ export async function updateSession(request: NextRequest) {
         !request.nextUrl.pathname.startsWith('/api/') &&
         !request.nextUrl.pathname.startsWith('/_next/') &&
         request.nextUrl.pathname !== '/' &&
-        request.nextUrl.pathname !== '/setup') {
+        request.nextUrl.pathname !== '/setup' &&
+        request.nextUrl.pathname !== '/login' &&
+        request.nextUrl.pathname !== '/signup') {
       
-      // Get user's organization data
-      const { data: userData } = await supabase
-        .from('users')
-        .select(`
-          *,
-          organization:organizations(*)
-        `)
-        .eq('id', session.user.id)
-        .single()
+      try {
+        // Get user's organization data (handle case where database isn't fully set up)
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select(`
+            *,
+            organization:organizations(*)
+          `)
+          .eq('id', session.user.id)
+          .single()
 
-      if (!userData?.organization) {
-        // Redirect to setup if user doesn't have an organization
-        return NextResponse.redirect(new URL('/setup', request.url))
+        // If there's a database error (table doesn't exist, etc.), allow through
+        if (userError && (userError.code === 'PGRST116' || userError.code === '42P01')) {
+          console.warn('Database not fully set up, allowing access:', userError.message)
+          return response
+        }
+
+        if (!userData?.organization) {
+          // Redirect to setup if user doesn't have an organization
+          return NextResponse.redirect(new URL('/setup', request.url))
+        }
+      } catch (error) {
+        console.warn('Middleware database check failed, allowing access:', error)
+        // Allow through if there are database connection issues during setup
+        return response
       }
     }
     

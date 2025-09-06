@@ -80,39 +80,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     try {
-      // Get user data with organization
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          *,
-          organization:organizations(*)
-        `)
-        .eq('id', supabaseUser.id)
-        .single()
+      // Use the API endpoint to get complete user + org info
+      const response = await fetch('/api/auth/user', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      })
 
-      if (userError) {
-        console.error('Error loading user data:', userError)
-        setLoading(false)
-        return
+      if (!response.ok) {
+        // If user not found in our system, they may need to complete registration
+        if (response.status === 404) {
+          // Check if they have a pending registration or invitation
+          setUser(null)
+          setCurrentOrganization(null)
+          setSupabaseUser(supabaseUser)
+          setLoading(false)
+          return
+        }
+        
+        // Handle database/server errors gracefully during setup
+        if (response.status >= 500) {
+          console.warn('Server error during auth setup, proceeding with basic auth:', response.status)
+          setUser(null)
+          setCurrentOrganization(null)
+          setSupabaseUser(supabaseUser)
+          setLoading(false)
+          return
+        }
+        
+        throw new Error(`Failed to load user data: ${response.status}`)
       }
+
+      const { user: userData, organization: currentOrg } = await response.json()
 
       if (!userData) {
+        setUser(null)
+        setCurrentOrganization(null)
+        setSupabaseUser(supabaseUser)
         setLoading(false)
         return
       }
 
-      // For now, create organizations array with current organization
-      // In production, you'd query user_organization_roles table
-      const organizations = userData.organization ? [{
-        id: userData.organization.id,
-        name: userData.organization.name,
-        slug: userData.organization.slug,
+      // Create organizations array (in the future this would include multiple orgs)
+      const organizations = currentOrg ? [{
+        id: currentOrg.id,
+        name: currentOrg.name,
+        slug: currentOrg.slug,
         role: userData.role,
         is_active: true
       }] : []
-
-      // Set current organization (primary organization from users table)
-      const currentOrg = userData.organization || null
 
       const authUser: AuthUser = {
         ...userData,
@@ -131,6 +148,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
     } catch (error) {
       console.error('Error in loadUserData:', error)
+      // On error, still set supabaseUser so we can handle incomplete registrations
+      setUser(null)
+      setCurrentOrganization(null)
+      setSupabaseUser(supabaseUser)
     } finally {
       setLoading(false)
     }
@@ -201,25 +222,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const switchOrganization = async (organizationId: string) => {
     if (!user) return
 
-    // Find the organization in user's organizations
-    const targetOrg = user.organizations?.find(org => org.id === organizationId)
-    if (!targetOrg) {
-      throw new Error('Organization not found in user organizations')
-    }
+    try {
+      // Use the API endpoint for organization switching
+      const response = await fetch('/api/auth/switch-organization', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ organization_id: organizationId })
+      })
 
-    // Update user's current organization
-    const { error } = await supabase
-      .from('users')
-      .update({ organization_id: organizationId })
-      .eq('id', user.id)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to switch organization')
+      }
 
-    if (error) {
+      // Refresh user data
+      await refreshUser()
+    } catch (error) {
       console.error('Error switching organization:', error)
       throw error
     }
-
-    // Refresh user data
-    await refreshUser()
   }
 
   const refreshUser = async () => {

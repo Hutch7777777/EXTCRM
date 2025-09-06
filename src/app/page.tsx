@@ -7,8 +7,8 @@ export default function HomePage() {
   const router = useRouter()
   
   useEffect(() => {
-    // Redirect to login on the client side to avoid SSR issues during setup
-    router.push('/login')
+    // Redirect to signup on the client side to showcase the new registration flow
+    router.push('/signup')
   }, [router])
 
   return (

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, FormEvent, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
@@ -13,13 +13,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
   const { signIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Check for success messages from URL params
+  useEffect(() => {
+    const message = searchParams.get('message')
+    if (message === 'invitation_accepted') {
+      setSuccessMessage('Invitation accepted successfully! You can now sign in.')
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSuccessMessage(null)
     setLoading(true)
 
     try {
@@ -49,6 +60,12 @@ export default function LoginPage() {
       
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-3">
+              <p className="text-sm text-green-600">{successMessage}</p>
+            </div>
+          )}
+          
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3">
               <p className="text-sm text-red-600">{error}</p>
