@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentUser, requireRole } from '@/lib/auth-helpers'
 import { NextResponse } from 'next/server'
-import { UserRole, Database } from '@/types/database'
+import { UserRole, Database } from '@/types/supabase'
 
 type Functions = Database['public']['Functions']
 
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     }
 
     // Use admin client to bypass RLS
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
 
     // Check if user is already in the organization
     const { data: existingUser } = await adminSupabase
@@ -194,7 +194,7 @@ export async function GET() {
       }, { status: 400 })
     }
 
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
 
     const { data: invitations, error } = await adminSupabase
       .from('user_invitations')

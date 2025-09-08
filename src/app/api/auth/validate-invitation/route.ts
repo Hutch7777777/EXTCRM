@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
 
     // Get invitation details
     const { data: invitation, error } = await supabase

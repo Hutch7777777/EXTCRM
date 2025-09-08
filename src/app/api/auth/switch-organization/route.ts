@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { NextResponse } from 'next/server'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 type Functions = Database['public']['Functions']
 
@@ -13,9 +13,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { organizationId } = await request.json()
+    const { organization_id } = await request.json()
 
-    if (!organizationId || typeof organizationId !== 'string') {
+    if (!organization_id || typeof organization_id !== 'string') {
       return NextResponse.json({ 
         error: 'Valid organization ID is required' 
       }, { status: 400 })
@@ -23,18 +23,18 @@ export async function POST(request: Request) {
 
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(organizationId)) {
+    if (!uuidRegex.test(organization_id)) {
       return NextResponse.json({
         error: 'Invalid organization ID format'
       }, { status: 400 })
     }
 
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
     
     // Use the database function to switch organizations
     const { data: success, error: funcError } = await adminSupabase.rpc('switch_user_organization', {
       p_user_id: user.id,
-      p_target_organization_id: organizationId
+      p_organization_id: organization_id
     } as Functions['switch_user_organization']['Args'])
 
     if (funcError) {
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
 
     // Find the current organization info
     const currentOrgInfo = updatedUserOrgInfo?.find(
-      (org: any) => org.organization_id === organizationId
+      (org: any) => org.organization_id === organization_id
     )
 
     return NextResponse.json({ 
@@ -108,7 +108,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
     
     // Get all organizations for this user
     const { data: userOrgInfo, error: funcError } = await adminSupabase.rpc('get_user_org_info', {

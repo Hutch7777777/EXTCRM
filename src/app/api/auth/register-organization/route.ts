@@ -1,6 +1,6 @@
 import { createAdminClient, createRouteClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 type Functions = Database['public']['Functions']
 
@@ -19,15 +19,49 @@ interface RegistrationRequest {
 
 export async function POST(request: Request) {
   try {
-    // Get the authenticated user from Supabase auth
-    const supabase = createRouteClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    console.log('🔍 [Register Organization] Starting authentication check...')
     
-    if (authError || !user) {
+    // Get the authenticated user from Supabase auth
+    const supabase = await createRouteClient()
+    console.log('✅ [Register Organization] Supabase client created successfully')
+    
+    // Try to get the user from the session
+    let { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    // If no user found via cookies, try the Authorization header
+    if (!user && !authError) {
+      const authHeader = request.headers.get('authorization')
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7)
+        const { data, error } = await supabase.auth.getUser(token)
+        user = data.user
+        authError = error
+        console.log('🔍 [Register Organization] Using Authorization header token')
+      }
+    }
+    
+    console.log('🔍 [Register Organization] Authentication result:', {
+      hasUser: !!user,
+      userEmail: user?.email || 'N/A',
+      authError: authError?.message || 'None'
+    })
+    
+    if (authError) {
+      console.error('❌ [Register Organization] Auth error:', authError)
       return NextResponse.json({ 
-        error: 'Authentication required' 
+        error: 'Authentication failed',
+        details: authError.message
       }, { status: 401 })
     }
+    
+    if (!user) {
+      console.error('❌ [Register Organization] No user found')
+      return NextResponse.json({ 
+        error: 'Authentication required - no user found' 
+      }, { status: 401 })
+    }
+    
+    console.log('✅ [Register Organization] User authenticated:', user.email)
 
     const body: RegistrationRequest = await request.json()
 
@@ -76,25 +110,37 @@ export async function POST(request: Request) {
     }
 
     // Use admin client to call the database function
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
     
     // Call the database function to create organization registration
+    const organizationData = {
+      name: body.organizationName.trim(),
+      slug: body.organizationSlug.trim(),
+      phone: body.phone?.trim() || null,
+      address_line_1: body.addressLine1?.trim() || null,
+      city: body.city?.trim() || null,
+      state: body.state?.trim() || null,
+      zip_code: body.zipCode?.trim() || null
+    }
+
+    // Call the database function with the updated signature
+    // Note: TypeScript types haven't been updated yet, so we bypass them
     const { data, error: funcError } = await adminSupabase.rpc('create_organization_registration', {
-      p_auth_user_id: user.id,
-      p_organization_name: body.organizationName.trim(),
-      p_organization_slug: body.organizationSlug.trim(),
-      p_owner_first_name: body.ownerFirstName.trim(),
-      p_owner_last_name: body.ownerLastName.trim(),
-      p_owner_email: body.ownerEmail.trim(),
-      p_phone: body.phone?.trim() || null,
-      p_address_line_1: body.addressLine1?.trim() || null,
-      p_city: body.city?.trim() || null,
-      p_state: body.state?.trim() || null,
-      p_zip_code: body.zipCode?.trim() || null
-    } as Functions['create_organization_registration']['Args'])
+      p_auth_user_id: user.id,  // Pass the authenticated user's ID
+      p_email: body.ownerEmail.trim(),
+      p_first_name: body.ownerFirstName.trim(),
+      p_last_name: body.ownerLastName.trim(),
+      p_organization_data: organizationData
+    } as any)
 
     if (funcError) {
-      console.error('Database function error:', funcError)
+      console.error('❌ Database function error details:', {
+        message: funcError.message,
+        code: funcError.code,
+        details: funcError.details,
+        hint: funcError.hint,
+        fullError: funcError
+      })
       
       // Handle specific database errors
       if (funcError.code === '23505') {
@@ -110,7 +156,8 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({
-        error: 'Failed to create organization registration'
+        error: `Database error saving new user: ${funcError.message}`,
+        details: funcError.details || 'No additional details available'
       }, { status: 500 })
     }
 

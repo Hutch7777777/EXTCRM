@@ -1,7 +1,7 @@
 import { createRouteClient, createAdminClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { NextResponse } from 'next/server'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 type Functions = Database['public']['Functions']
 
@@ -14,7 +14,7 @@ export async function GET() {
     }
 
     // Use the database function to get comprehensive user organization info
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
     
     // Try to use the database function, but fallback if it doesn't exist yet
     try {
@@ -126,7 +126,7 @@ export async function PATCH(request: Request) {
       sanitizedUpdates.display_name = `${firstName} ${lastName}`.trim()
     }
 
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
     
     const { data, error } = await supabase
       .from('users')
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
     const { action } = body
 
     if (action === 'track-login') {
-      const supabase = createRouteClient()
+      const supabase = await createRouteClient()
       const now = new Date().toISOString()
       
       // Update login tracking

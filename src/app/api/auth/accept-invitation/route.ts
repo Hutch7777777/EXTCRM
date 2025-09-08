@@ -1,6 +1,6 @@
 import { createAdminClient, createRouteClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { UserRole, UserStatus } from '@/types/database'
+import { UserRole, UserStatus } from '@/types/supabase'
 
 interface AcceptInvitationRequest {
   invitationToken: string
@@ -14,7 +14,7 @@ interface AcceptInvitationRequest {
 export async function POST(request: Request) {
   try {
     // Get the authenticated user from Supabase auth
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !user) {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     // Use admin client to bypass RLS for invitation lookup
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
 
     // Find the invitation by token
     const { data: invitation, error: invitationError } = await adminSupabase
@@ -214,7 +214,7 @@ export async function GET(request: Request) {
       }, { status: 400 })
     }
 
-    const adminSupabase = createAdminClient()
+    const adminSupabase = await createAdminClient()
 
     // Find the invitation by token
     const { data: invitation, error: invitationError } = await adminSupabase

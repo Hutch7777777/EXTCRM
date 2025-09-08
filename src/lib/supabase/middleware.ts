@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 import type { NextRequest } from 'next/server'
 
@@ -16,49 +16,28 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options: any) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value, options)
           })
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: any) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
           })
         },
       },
     }
   )
 
-  // Refresh session if expired - required for Server Components
-  const { data: { session }, error } = await supabase.auth.getSession()
+  // Validate user authentication - required for Server Components
+  const { data: { user }, error } = await supabase.auth.getUser()
 
   if (error) {
     console.error('Middleware auth error:', error)
@@ -66,7 +45,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If user is signed in but not on a public route, continue
-  if (session) {
+  if (user) {
     // Check if user has completed organization setup
     if (!request.nextUrl.pathname.startsWith('/auth/') && 
         !request.nextUrl.pathname.startsWith('/api/') &&
@@ -84,7 +63,7 @@ export async function updateSession(request: NextRequest) {
             *,
             organization:organizations(*)
           `)
-          .eq('id', session.user.id)
+          .eq('id', user.id)
           .single()
 
         // If there's a database error (table doesn't exist, etc.), allow through
@@ -108,7 +87,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If user is not signed in and trying to access protected route
-  if (!session && 
+  if (!user && 
       !request.nextUrl.pathname.startsWith('/auth/') && 
       !request.nextUrl.pathname.startsWith('/api/') &&
       !request.nextUrl.pathname.startsWith('/_next/') &&

@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { TeamInvitationModal } from '@/components/auth/team-invitation-modal'
-import { UserRole } from '@/types/database'
+import { UserRole } from '@/types/supabase'
 
 interface TeamMember {
   id: string

@@ -1,10 +1,10 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 // Server-side Supabase client for Server Components and API Routes
-export const createServerClient = () => {
-  const cookieStore = cookies()
+export const createServerClient = async () => {
+  const cookieStore = await cookies()
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
@@ -13,22 +13,16 @@ export const createServerClient = () => {
     supabaseAnonKey,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: any) {
+        setAll(cookiesToSet) {
           try {
-            cookieStore.set({ name, value, ...options })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
           } catch (error) {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing user sessions.
-          }
-        },
-        remove(name: string, options: any) {
-          try {
-            cookieStore.set({ name, value: '', ...options })
-          } catch (error) {
-            // The `delete` method was called from a Server Component.
+            // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing user sessions.
           }
         },
@@ -44,7 +38,7 @@ export const createServerActionClient = createServerClient
 export const createRouteClient = createServerClient
 
 // Admin client with service role key (use with caution)
-export const createAdminClient = () => {
+export const createAdminClient = async () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   
@@ -52,26 +46,21 @@ export const createAdminClient = () => {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin client')
   }
 
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
 
   return createSupabaseServerClient<Database>(
     supabaseUrl,
     serviceRoleKey,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        getAll() {
+          return cookieStore.getAll()
         },
-        set(name: string, value: string, options: any) {
+        setAll(cookiesToSet) {
           try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            // Ignore cookie errors in admin client
-          }
-        },
-        remove(name: string, options: any) {
-          try {
-            cookieStore.set({ name, value: '', ...options })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
           } catch (error) {
             // Ignore cookie errors in admin client
           }

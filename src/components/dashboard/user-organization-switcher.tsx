@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TeamInvitationModal } from '@/components/auth/team-invitation-modal'
-import { UserRole } from '@/types/database'
+import { UserRole } from '@/types/supabase'
 
 export function UserOrganizationSwitcher() {
   const { 

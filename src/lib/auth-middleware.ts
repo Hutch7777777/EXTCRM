@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { createErrorResponse, checkRateLimit, getRequestMetadata } from '@/lib/api-helpers'
-import { UserRole } from '@/types/database'
+import { UserRole } from '@/types/supabase'
 
 /**
  * Authentication middleware for API routes

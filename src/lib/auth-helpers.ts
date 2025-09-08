@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { createRouteClient } from '@/lib/supabase/server'
-import { UserRole, Database } from '@/types/database'
+import { UserRole, Database } from '@/types/supabase'
 import { cookies } from 'next/headers'
 
 type Tables = Database['public']['Tables']
@@ -16,7 +16,7 @@ export interface AuthUser extends UserRow {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
@@ -76,7 +76,7 @@ export async function hasPermission(resource: string, action: string): Promise<b
   if (user.role === 'owner') return true
 
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     
     const { data: permissions } = await supabase
       .from('role_permissions')
@@ -97,7 +97,7 @@ export async function hasPermission(resource: string, action: string): Promise<b
  */
 export async function getSession() {
   try {
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
     const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
@@ -154,7 +154,7 @@ export async function trackSession(deviceInfo?: any) {
     const user = await getCurrentUser()
     if (!user) return
 
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
     
     // Get request info (this would be enhanced with actual request data)
     const sessionData = {
@@ -183,7 +183,7 @@ export async function trackSession(deviceInfo?: any) {
  */
 export async function updateLastLogin(userId: string) {
   try {
-    const supabase = createRouteClient()
+    const supabase = await createRouteClient()
     
     const { error } = await supabase
       .from('users')

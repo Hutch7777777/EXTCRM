@@ -65,7 +65,7 @@ export default function VerifyEmailPage() {
       
       <CardFooter className="justify-center">
         <Button asChild variant="outline">
-          <Link href="/auth/login">
+          <Link href="/login">
             Back to Sign In
           </Link>
         </Button>

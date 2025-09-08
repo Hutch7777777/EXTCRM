@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, AuthError } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { UserRole, Database } from '@/types/database'
+import { UserRole, Database } from '@/types/supabase'
 
 type Tables = Database['public']['Tables']
 type UserRow = Tables['users']['Row']
@@ -29,13 +29,13 @@ interface AuthContextType {
   loading: boolean
   
   // Auth methods
-  signIn: (email: string, password: string) => Promise<{ error?: AuthError }>
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
   signUp: (email: string, password: string, userData: {
     first_name: string
     last_name: string
     organization_name?: string
-  }) => Promise<{ error?: AuthError }>
+  }) => Promise<{ error: AuthError | null }>
   
   // Organization methods
   switchOrganization: (organizationId: string) => Promise<void>
@@ -72,7 +72,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Load user data including organizations and current context
   const loadUserData = async (supabaseUser: User | null) => {
+    console.log('🔄 [AuthContext] Loading user data for:', supabaseUser?.email || 'null')
+    
     if (!supabaseUser) {
+      console.log('❌ [AuthContext] No supabase user found')
       setUser(null)
       setCurrentOrganization(null)
       setLoading(false)
@@ -80,6 +83,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     try {
+      console.log('🔄 [AuthContext] Fetching user data from API...')
+      
       // Use the API endpoint to get complete user + org info
       const response = await fetch('/api/auth/user', {
         method: 'GET',
@@ -88,10 +93,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       })
 
+      console.log('📋 [AuthContext] API response status:', response.status)
+
       if (!response.ok) {
         // If user not found in our system, they may need to complete registration
         if (response.status === 404) {
-          // Check if they have a pending registration or invitation
+          console.log('❌ [AuthContext] User not found in system (404) - may need registration')
           setUser(null)
           setCurrentOrganization(null)
           setSupabaseUser(supabaseUser)
@@ -101,7 +108,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         // Handle database/server errors gracefully during setup
         if (response.status >= 500) {
-          console.warn('Server error during auth setup, proceeding with basic auth:', response.status)
+          console.warn('⚠️ [AuthContext] Server error during auth setup, proceeding with basic auth:', response.status)
           setUser(null)
           setCurrentOrganization(null)
           setSupabaseUser(supabaseUser)
@@ -113,6 +120,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       const { user: userData, organization: currentOrg } = await response.json()
+      console.log('📋 [AuthContext] API data received:', { 
+        hasUser: !!userData, 
+        hasOrg: !!currentOrg,
+        userRole: userData?.role 
+      })
 
       if (!userData) {
         setUser(null)
@@ -137,6 +149,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         current_organization: currentOrg
       }
 
+      console.log('✅ [AuthContext] User data loaded successfully:', authUser.email, authUser.role)
+      
       setUser(authUser)
       setCurrentOrganization(currentOrg)
       setSupabaseUser(supabaseUser)
@@ -144,6 +158,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Store current organization in localStorage for persistence
       if (currentOrg) {
         localStorage.setItem('current_organization_id', currentOrg.id)
+        console.log('💾 [AuthContext] Stored current organization:', currentOrg.name)
       }
       
     } catch (error) {
@@ -171,9 +186,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 [AuthContext] Auth state change:', event, session?.user?.email || 'no user')
+      
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await loadUserData(session?.user || null)
       } else if (event === 'SIGNED_OUT') {
+        console.log('👋 [AuthContext] User signed out, clearing state')
         setUser(null)
         setSupabaseUser(null)
         setCurrentOrganization(null)

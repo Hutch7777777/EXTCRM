@@ -34,15 +34,24 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      console.log('🔄 [Login] Attempting sign in for:', email)
       const { error } = await signIn(email, password)
       
       if (error) {
+        console.error('❌ [Login] Sign in error:', error.message)
         setError(error.message)
       } else {
+        console.log('✅ [Login] Sign in successful, waiting for auth state refresh...')
+        
+        // Wait a moment for auth state to be updated
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        console.log('🔄 [Login] Redirecting to dashboard...')
         router.push('/dashboard')
         router.refresh()
       }
     } catch (err) {
+      console.error('❌ [Login] Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -124,7 +133,7 @@ export default function LoginPage() {
           <div className="text-center text-sm text-gray-600">
             Don't have an account?{' '}
             <Link 
-              href="/auth/signup" 
+              href="/signup" 
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
               Sign up

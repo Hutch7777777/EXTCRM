@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { createClient } from '@/lib/supabase/client'
 
 // Define the US states
 const US_STATES = [
@@ -197,18 +198,119 @@ export function OrganizationRegistrationForm() {
     setLoading(true)
 
     try {
-      // Step 1: Create organization registration
+      console.log('🔍 [Registration] Starting user creation...')
+      const supabase = createClient()
+      
+      // Step 1: Create Supabase user account first
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            full_name: `${formData.firstName} ${formData.lastName}`
+          }
+        }
+      })
+
+      if (authError) {
+        console.error('❌ [Registration] Auth signup error:', authError)
+        throw new Error(authError.message || 'Failed to create user account')
+      }
+
+      console.log('✅ [Registration] User created successfully:', authData.user?.email)
+
+      // Check if email verification is required
+      if (authData.user && !authData.user.email_confirmed_at) {
+        console.log('📧 [Registration] Email verification required, saving form data...')
+        
+        // Save organization data to localStorage to complete after verification
+        const organizationData = {
+          organizationName: formData.organizationName,
+          organizationSlug: formData.organizationName.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+          ownerFirstName: formData.firstName,
+          ownerLastName: formData.lastName,
+          ownerEmail: formData.email,
+          phone: formData.phone || null,
+          addressLine1: formData.addressLine1,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode
+        }
+        
+        localStorage.setItem('pending_organization_registration', JSON.stringify(organizationData))
+        
+        // Redirect to email verification page
+        router.push('/verify-email?type=registration')
+        return
+      }
+
+      // If email is already verified, try to create organization immediately
+      console.log('✅ [Registration] Email already verified, creating organization...')
+      
+      // Step 2: Wait for session to be established and refresh auth state
+      console.log('🔄 [Registration] Waiting for session establishment...')
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('❌ [Registration] Session error:', sessionError)
+        throw new Error(`Session error: ${sessionError.message}`)
+      }
+      
+      if (!sessionData.session) {
+        console.error('❌ [Registration] No session found after signup')
+        console.log('🔄 [Registration] Redirecting to email verification...')
+        
+        // Save organization data for completion after verification
+        const organizationData = {
+          organizationName: formData.organizationName,
+          organizationSlug: formData.organizationName.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+          ownerFirstName: formData.firstName,
+          ownerLastName: formData.lastName,
+          ownerEmail: formData.email,
+          phone: formData.phone || null,
+          addressLine1: formData.addressLine1,
+          city: formData.city,
+          state: formData.state,
+          zipCode: formData.zipCode
+        }
+        
+        localStorage.setItem('pending_organization_registration', JSON.stringify(organizationData))
+        router.push('/verify-email?type=registration')
+        return
+      }
+      
+      console.log('✅ [Registration] Session established, proceeding with organization creation...')
+
+      // Step 3: Create organization registration with authenticated session
       const registrationResponse = await fetch('/api/auth/register-organization', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           organizationName: formData.organizationName,
+          organizationSlug: formData.organizationName.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, ''),
           ownerFirstName: formData.firstName,
           ownerLastName: formData.lastName,
           ownerEmail: formData.email,
-          password: formData.password,
           phone: formData.phone || null,
           addressLine1: formData.addressLine1,
           city: formData.city,
@@ -220,14 +322,15 @@ export function OrganizationRegistrationForm() {
       const registrationData = await registrationResponse.json()
 
       if (!registrationResponse.ok) {
+        console.error('❌ [Registration] Organization creation failed:', registrationData)
         throw new Error(registrationData.error || 'Failed to register organization')
       }
 
-      // Redirect to email verification page
-      router.push('/auth/verify-email?type=registration')
+      console.log('✅ [Registration] Organization created successfully!')
+      router.push('/dashboard')
       
     } catch (err) {
-      console.error('Registration error:', err)
+      console.error('❌ [Registration] Overall error:', err)
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setLoading(false)

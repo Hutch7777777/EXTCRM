@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { Database, UserRole } from '@/types/database'
+import { Database, UserRole } from '@/types/supabase'
 
 type Tables = Database['public']['Tables']
 

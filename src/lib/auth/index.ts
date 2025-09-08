@@ -41,6 +41,6 @@ export type {
   UserStatus, 
   OrganizationStatus, 
   Database 
-} from '@/types/database'
+} from '@/types/supabase'
 
 export type { AuthUser } from '@/contexts/auth-context'
