@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/types/database'
+import { Database } from '@/types/supabase'
 
 // Client-side Supabase client for use in React components
 export const createClient = () => {

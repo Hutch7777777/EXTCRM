@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, FormEvent, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
@@ -13,25 +13,45 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   
   const { signIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Check for success messages from URL params
+  useEffect(() => {
+    const message = searchParams.get('message')
+    if (message === 'invitation_accepted') {
+      setSuccessMessage('Invitation accepted successfully! You can now sign in.')
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSuccessMessage(null)
     setLoading(true)
 
     try {
+      console.log('🔄 [Login] Attempting sign in for:', email)
       const { error } = await signIn(email, password)
       
       if (error) {
+        console.error('❌ [Login] Sign in error:', error.message)
         setError(error.message)
       } else {
+        console.log('✅ [Login] Sign in successful, waiting for auth state refresh...')
+        
+        // Wait a moment for auth state to be updated
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        console.log('🔄 [Login] Redirecting to dashboard...')
         router.push('/dashboard')
         router.refresh()
       }
     } catch (err) {
+      console.error('❌ [Login] Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -49,6 +69,12 @@ export default function LoginPage() {
       
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-3">
+              <p className="text-sm text-green-600">{successMessage}</p>
+            </div>
+          )}
+          
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3">
               <p className="text-sm text-red-600">{error}</p>
@@ -107,7 +133,7 @@ export default function LoginPage() {
           <div className="text-center text-sm text-gray-600">
             Don't have an account?{' '}
             <Link 
-              href="/auth/signup" 
+              href="/signup" 
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
               Sign up

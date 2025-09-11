@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, AuthError } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
-import { UserRole, Database } from '@/types/database'
+import { UserRole, Database } from '@/types/supabase'
 
 type Tables = Database['public']['Tables']
 type UserRow = Tables['users']['Row']
@@ -29,13 +29,13 @@ interface AuthContextType {
   loading: boolean
   
   // Auth methods
-  signIn: (email: string, password: string) => Promise<{ error?: AuthError }>
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<void>
   signUp: (email: string, password: string, userData: {
     first_name: string
     last_name: string
     organization_name?: string
-  }) => Promise<{ error?: AuthError }>
+  }) => Promise<{ error: AuthError | null }>
   
   // Organization methods
   switchOrganization: (organizationId: string) => Promise<void>
@@ -72,7 +72,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Load user data including organizations and current context
   const loadUserData = async (supabaseUser: User | null) => {
+    console.log('🔄 [AuthContext] Loading user data for:', supabaseUser?.email || 'null')
+    
     if (!supabaseUser) {
+      console.log('❌ [AuthContext] No supabase user found')
       setUser(null)
       setCurrentOrganization(null)
       setLoading(false)
@@ -80,39 +83,65 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     try {
-      // Get user data with organization
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          *,
-          organization:organizations(*)
-        `)
-        .eq('id', supabaseUser.id)
-        .single()
+      console.log('🔄 [AuthContext] Fetching user data from API...')
+      
+      // Use the API endpoint to get complete user + org info
+      const response = await fetch('/api/auth/user', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      })
 
-      if (userError) {
-        console.error('Error loading user data:', userError)
-        setLoading(false)
-        return
+      console.log('📋 [AuthContext] API response status:', response.status)
+
+      if (!response.ok) {
+        // If user not found in our system, they may need to complete registration
+        if (response.status === 404) {
+          console.log('❌ [AuthContext] User not found in system (404) - may need registration')
+          setUser(null)
+          setCurrentOrganization(null)
+          setSupabaseUser(supabaseUser)
+          setLoading(false)
+          return
+        }
+        
+        // Handle database/server errors gracefully during setup
+        if (response.status >= 500) {
+          console.warn('⚠️ [AuthContext] Server error during auth setup, proceeding with basic auth:', response.status)
+          setUser(null)
+          setCurrentOrganization(null)
+          setSupabaseUser(supabaseUser)
+          setLoading(false)
+          return
+        }
+        
+        throw new Error(`Failed to load user data: ${response.status}`)
       }
+
+      const { user: userData, organization: currentOrg } = await response.json()
+      console.log('📋 [AuthContext] API data received:', { 
+        hasUser: !!userData, 
+        hasOrg: !!currentOrg,
+        userRole: userData?.role 
+      })
 
       if (!userData) {
+        setUser(null)
+        setCurrentOrganization(null)
+        setSupabaseUser(supabaseUser)
         setLoading(false)
         return
       }
 
-      // For now, create organizations array with current organization
-      // In production, you'd query user_organization_roles table
-      const organizations = userData.organization ? [{
-        id: userData.organization.id,
-        name: userData.organization.name,
-        slug: userData.organization.slug,
+      // Create organizations array (in the future this would include multiple orgs)
+      const organizations = currentOrg ? [{
+        id: currentOrg.id,
+        name: currentOrg.name,
+        slug: currentOrg.slug,
         role: userData.role,
         is_active: true
       }] : []
-
-      // Set current organization (primary organization from users table)
-      const currentOrg = userData.organization || null
 
       const authUser: AuthUser = {
         ...userData,
@@ -120,6 +149,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         current_organization: currentOrg
       }
 
+      console.log('✅ [AuthContext] User data loaded successfully:', authUser.email, authUser.role)
+      
       setUser(authUser)
       setCurrentOrganization(currentOrg)
       setSupabaseUser(supabaseUser)
@@ -127,10 +158,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Store current organization in localStorage for persistence
       if (currentOrg) {
         localStorage.setItem('current_organization_id', currentOrg.id)
+        console.log('💾 [AuthContext] Stored current organization:', currentOrg.name)
       }
       
     } catch (error) {
       console.error('Error in loadUserData:', error)
+      // On error, still set supabaseUser so we can handle incomplete registrations
+      setUser(null)
+      setCurrentOrganization(null)
+      setSupabaseUser(supabaseUser)
     } finally {
       setLoading(false)
     }
@@ -150,9 +186,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 [AuthContext] Auth state change:', event, session?.user?.email || 'no user')
+      
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await loadUserData(session?.user || null)
       } else if (event === 'SIGNED_OUT') {
+        console.log('👋 [AuthContext] User signed out, clearing state')
         setUser(null)
         setSupabaseUser(null)
         setCurrentOrganization(null)
@@ -201,25 +240,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const switchOrganization = async (organizationId: string) => {
     if (!user) return
 
-    // Find the organization in user's organizations
-    const targetOrg = user.organizations?.find(org => org.id === organizationId)
-    if (!targetOrg) {
-      throw new Error('Organization not found in user organizations')
-    }
+    try {
+      // Use the API endpoint for organization switching
+      const response = await fetch('/api/auth/switch-organization', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ organization_id: organizationId })
+      })
 
-    // Update user's current organization
-    const { error } = await supabase
-      .from('users')
-      .update({ organization_id: organizationId })
-      .eq('id', user.id)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to switch organization')
+      }
 
-    if (error) {
+      // Refresh user data
+      await refreshUser()
+    } catch (error) {
       console.error('Error switching organization:', error)
       throw error
     }
-
-    // Refresh user data
-    await refreshUser()
   }
 
   const refreshUser = async () => {

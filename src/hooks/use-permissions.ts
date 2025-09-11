@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/contexts/auth-context'
-import { UserRole } from '@/types/database'
+import { UserRole } from '@/types/supabase'
 
 export interface PermissionCheck {
   resource: string

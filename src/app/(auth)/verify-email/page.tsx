@@ -1,14 +1,25 @@
+'use client'
+
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 export default function VerifyEmailPage() {
+  const searchParams = useSearchParams()
+  const type = searchParams.get('type')
+  
+  const isRegistration = type === 'registration'
+  
   return (
     <Card className="w-full">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl font-bold">Check Your Email</CardTitle>
         <CardDescription>
-          We've sent you a confirmation link
+          {isRegistration 
+            ? "We've sent you a confirmation link to complete your organization setup"
+            : "We've sent you a confirmation link"
+          }
         </CardDescription>
       </CardHeader>
       
@@ -21,12 +32,26 @@ export default function VerifyEmailPage() {
         
         <div className="space-y-2">
           <p className="text-gray-600">
-            Please check your email and click the confirmation link to activate your account.
+            {isRegistration 
+              ? "Please check your email and click the confirmation link to activate your account and complete your organization setup."
+              : "Please check your email and click the confirmation link to activate your account."
+            }
           </p>
           <p className="text-sm text-gray-500">
             The link will expire in 24 hours.
           </p>
         </div>
+        
+        {isRegistration && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <p className="text-sm text-green-800">
+              <strong>What happens next?</strong>
+            </p>
+            <p className="text-sm text-green-700 mt-1">
+              Once you confirm your email, your organization will be set up automatically and you'll be signed in as the owner.
+            </p>
+          </div>
+        )}
         
         <div className="bg-gray-50 rounded-md p-4">
           <p className="text-sm text-gray-600">
@@ -40,7 +65,7 @@ export default function VerifyEmailPage() {
       
       <CardFooter className="justify-center">
         <Button asChild variant="outline">
-          <Link href="/auth/login">
+          <Link href="/login">
             Back to Sign In
           </Link>
         </Button>

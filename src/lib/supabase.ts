@@ -6,4 +6,4 @@ export { createClient } from './supabase/client'
 export { createServerClient, createRouteClient, createAdminClient } from './supabase/server'
 
 // Re-export database types
-export type { Database } from '@/types/database'
+export type { Database } from '@/types/supabase'
